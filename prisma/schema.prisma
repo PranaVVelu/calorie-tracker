@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id             String        @id @default(cuid())
+  email          String?       @unique
+  name           String?
+  age            Int
+  gender         String // "male" | "female" (for BMR calc)
+  height         Float // in cm
+  weight         Float // in kg (current weight)
+  activityLevel  Float // multiplier (1.2 - 1.9)
+  goalType       String // "lose" | "maintain" | "gain"
+  goalRate       Float // kg per week
+  goalWeight     Float // in kg
+
+  // Calculated Targets (stored for easy query, updated when profile changes)
+  tdee           Float
+  calorieTarget  Int
+  proteinTarget  Int
+  carbsTarget    Int
+  fatTarget      Int
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  mealEntries    MealEntry[]
+  weightEntries  WeightEntry[]
+}
+
+model FoodItem {
+  id           String     @id @default(cuid())
+  name         String
+  calories     Float
+  protein      Float
+  carbs        Float
+  fat          Float
+  servingSize  String     // e.g. "100g", "1 apple"
+  source       String     @default("seed") // "seed" | "user_manual"
+  
+  mealFoods    MealFood[]
+}
+
+model MealEntry {
+  id        String     @id @default(cuid())
+  date      DateTime   // Stored as start of day for grouping
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  mealFoods MealFood[]
+  
+  createdAt DateTime   @default(now())
+  
+  @@unique([userId, date]) // one meal entry container per user per day
+}
+
+model MealFood {
+  id          String    @id @default(cuid())
+  mealType    String    // "Breakfast" | "Lunch" | "Dinner" | "Snack"
+  servings    Float     @default(1.0)
+  
+  mealEntryId String
+  mealEntry   MealEntry @relation(fields: [mealEntryId], references: [id], onDelete: Cascade)
+  
+  foodItemId  String
+  foodItem    FoodItem  @relation(fields: [foodItemId], references: [id], onDelete: Restrict)
+  
+  createdAt   DateTime  @default(now())
+}
+
+model WeightEntry {
+  id        String   @id @default(cuid())
+  weight    Float    // in kg
+  date      DateTime
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date]) // limit to one recorded weight daily
+}

@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MacroTrack: Calorie & Macro Tracker
 
-## Getting Started
+MacroTrack is a full-stack Next.js application designed to help users manage their dietary goals, log foods, and track their weight over time. 
 
-First, run the development server:
+Built with React (Next.js App Router), Tailwind CSS, and Prisma (SQLite), this application operates entirely locally for rapid development and testing without reliance on external paid APIs.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Architecture & Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The application is structured into three primary user flows:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Dashboard (`/`)**: A daily overview displaying remaining calories, macronutrient progress rings (Protein, Carbs, Fat), a quick view of today's logged meals, and overall goal status.
+2. **Food Logging (`/log`)**: A searchable interface connecting to a locally seeded database of 100+ food items. Users can add foods to specific meals (Breakfast, Lunch, Dinner, Snack) with adjustable serving sizes.
+3. **Weight Tracking (`/weight`)**: Allows users to log their weight. It also features a "Time to Goal" estimation engine that provides projections based on both theoretical intake and actual historical scale trends.
+4. **Settings & Onboarding (`/settings`)**: A form to capture demographic data (age, weight, height, gender, activity level) and dietary goals (lose/maintain/gain, target rate).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup Instructions
 
-## Learn More
+1. **Prerequisites**: Ensure you have Node.js (v18+) and npm installed.
+2. **Install Dependencies**:
+   ```bash
+   cd calorie-tracker
+   npm install
+   ```
+3. **Initialize Database**:
+   The project uses a local SQLite database (`dev.db`). Push the Prisma schema to create the tables:
+   ```bash
+   npx prisma db push
+   ```
+4. **Seed the Database**:
+   Populate the database with the initial 100 food items and two sample users ("John Loss" and "Jane Gain"):
+   ```bash
+   npm run seed
+   ```
+5. **Run the Development Server**:
+   ```bash
+   npm run dev
+   ```
+6. **Access the App**:
+   Open `http://localhost:3000` in your browser. 
+   *(Note: The app is currently hardcoded in the frontend to load the profile of `loser@test.com` for demonstration purposes. To view the weight gain profile, you can manually change the `email` variable in `src/app/page.tsx` to `gainer@test.com`.)*
 
-To learn more about Next.js, take a look at the following resources:
+## Algorithms & Logic
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The core algorithmic logic is located in `src/utils/algorithms.ts` and is covered by Jest unit tests (`npm test`).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 1. BMR & TDEE
+We use the **Mifflin-St Jeor equation** to calculate Base Metabolic Rate (BMR):
+- Men: `10 × weight(kg) + 6.25 × height(cm) - 5 × age(y) + 5`
+- Women: `10 × weight(kg) + 6.25 × height(cm) - 5 × age(y) - 161`
 
-## Deploy on Vercel
+Total Daily Energy Expenditure (TDEE) is then calculated as `BMR × Activity Multiplier` (ranging from 1.2 for sedentary to 1.9 for extra active).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 2. Calorie Targets & Guardrails
+- 1 kg of body fat contains roughly 7,700 kcal.
+- To lose 0.5 kg a week, a daily deficit of ~550 kcal is required `(0.5 * 7700 / 7)`.
+- **Safety Guardrails:** The algorithm enforces a minimum daily allowance of 1,200 kcal for women and 1,500 kcal for men to ensure nutritional safety, overriding extreme target rates if necessary.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 3. Macronutrient Distribution
+By default, the app calculates static, diet-safe macro ratios based on the calorie target:
+- **Protein**: 2.0g per kg of body weight (for muscle retention/growth during cuts or bulks) or 1.8g for maintenance.
+- **Fat**: 25% of total daily calories.
+- **Carbohydrates**: The remaining allotted calories.
+
+### 4. Time to Goal Estimator
+The `/weight` page provides two distinct projections:
+- **Projected by Intake**: Compares theoretical intake (Target Calories) against TDEE. Using the 7,700 kcal/kg rule, it dictates how many weeks it should take to reach the goal weight.
+- **Projected by Scale Trend**: A linear regression algorithm that analyzes historical `WeightEntry` logs to find the current trajectory slope. It extends this line into the future to predict the exact date the goal weight will be achieved, accounting for plateaus or actual metabolism variances.
