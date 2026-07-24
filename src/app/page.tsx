@@ -12,8 +12,8 @@ export default async function Dashboard() {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-center">
                 <h2 className="text-2xl font-bold mb-4">Welcome to MacroTrack</h2>
-                <p className="text-gray-600 mb-6">Let's get started by setting up your profile and goals.</p>
-                <Link href="/settings" className="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg font-medium transition-colors">
+                <p className="text-gray-400 mb-6">Let's get started by setting up your profile and goals.</p>
+                <Link href="/settings" className="bg-primary hover:bg-primary-dark text-black font-semibold glow-primary px-6 py-3 rounded-lg font-medium transition-colors">
                     Set up Profile
                 </Link>
             </div>
@@ -44,17 +44,17 @@ export default async function Dashboard() {
     return (
         <div className="space-y-6">
             <header className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-900">Today's Overview</h1>
-                <p className="text-gray-500">Welcome back, {user.name?.split(' ')[0] || 'User'}</p>
+                <h1 className="text-2xl font-bold text-white">Today's Overview</h1>
+                <p className="text-gray-400">Welcome back, {user.name?.split(' ')[0] || 'User'}</p>
             </header>
 
             {/* Main Calorie & Macro Summary */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
 
                 {/* Calories Card */}
-                <Card className="lg:col-span-1 border-primary/20 shadow-sm bg-gradient-to-b from-white to-green-50/30">
+                <Card className="lg:col-span-1 border-primary/30 glow-primary bg-gradient-to-b from-primary/10 to-transparent">
                     <CardContent className="flex flex-col items-center justify-center h-full py-8">
-                        <h3 className="text-sm font-medium text-gray-500 mb-4 uppercase tracking-wider">Calories</h3>
+                        <h3 className="text-sm font-medium text-gray-400 mb-4 uppercase tracking-wider">Calories</h3>
                         <ProgressRing
                             value={totalCals}
                             max={user.calorieTarget}
@@ -65,8 +65,8 @@ export default async function Dashboard() {
                             colorClass="text-primary"
                         />
                         <div className="mt-6 text-center">
-                            <span className="text-2xl font-bold text-gray-900">{Math.round(remainingCals)}</span>
-                            <span className="text-sm text-gray-500 block">Remaining</span>
+                            <span className="text-2xl font-bold text-white">{Math.round(remainingCals)}</span>
+                            <span className="text-sm text-gray-400 block">Remaining</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -120,15 +120,15 @@ export default async function Dashboard() {
                                     if (foods.length === 0) return null;
 
                                     return (
-                                        <div key={mealType} className="border-b border-gray-100 pb-3 last:border-0">
-                                            <h4 className="font-medium text-sm text-gray-900 mb-2">{mealType}</h4>
+                                        <div key={mealType} className="border-b border-white/10 pb-3 last:border-0">
+                                            <h4 className="font-medium text-sm text-white mb-2">{mealType}</h4>
                                             <ul className="space-y-2">
                                                 {foods.map((mf: any) => (
                                                     <li key={mf.id} className="flex justify-between text-sm">
-                                                        <span className="text-gray-600">
+                                                        <span className="text-gray-400">
                                                             {mf.servings}x {mf.foodItem.name}
                                                         </span>
-                                                        <span className="font-medium text-gray-900">
+                                                        <span className="font-medium text-white">
                                                             {Math.round(mf.foodItem.calories * mf.servings)} kcal
                                                         </span>
                                                     </li>
@@ -144,9 +144,9 @@ export default async function Dashboard() {
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-center py-6 text-gray-500">
+                            <div className="text-center py-6 text-gray-400">
                                 <p className="mb-4">No food logged yet today.</p>
-                                <Link href="/log" className="bg-white border shadow-sm px-4 py-2 rounded-md hover:bg-gray-50 transition-colors">
+                                <Link href="/log" className="inline-block bg-white/5 border border-white/15 text-white shadow-sm px-4 py-2 rounded-md hover:bg-white/10 transition-colors">
                                     Add Entry
                                 </Link>
                             </div>
@@ -158,21 +158,21 @@ export default async function Dashboard() {
                     <CardHeader title="Goal Status" />
                     <CardContent>
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                                <span className="text-gray-600 font-medium">Goal Type</span>
-                                <span className="capitalize font-semibold text-gray-900">{user.goalType}</span>
+                            <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg">
+                                <span className="text-gray-400 font-medium">Goal Type</span>
+                                <span className="capitalize font-semibold text-white">{user.goalType}</span>
                             </div>
-                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                                <span className="text-gray-600 font-medium">Target Rate</span>
-                                <span className="font-semibold text-gray-900">{user.goalRate} kg/week</span>
+                            <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg">
+                                <span className="text-gray-400 font-medium">Target Rate</span>
+                                <span className="font-semibold text-white">{user.goalRate} kg/week</span>
                             </div>
-                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg">
-                                <span className="text-gray-600 font-medium">Maintenance (TDEE)</span>
-                                <span className="font-semibold text-gray-900">{Math.round(user.tdee)} kcal</span>
+                            <div className="flex justify-between items-center bg-white/5 p-3 rounded-lg">
+                                <span className="text-gray-400 font-medium">Maintenance (TDEE)</span>
+                                <span className="font-semibold text-white">{Math.round(user.tdee)} kcal</span>
                             </div>
 
                             <div className="pt-4">
-                                <Link href="/settings" className="w-full block text-center bg-gray-50 hover:bg-gray-100 transition-colors border border-gray-200 py-2 rounded-lg font-medium text-sm text-gray-700">
+                                <Link href="/settings" className="w-full block text-center bg-white/5 hover:bg-white/10 transition-colors border border-white/15 py-2 rounded-lg font-medium text-sm text-gray-300">
                                     Edit Profile
                                 </Link>
                             </div>

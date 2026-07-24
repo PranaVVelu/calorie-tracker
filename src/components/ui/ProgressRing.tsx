@@ -46,7 +46,7 @@ export function ProgressRing({
                         stroke="currentColor"
                         strokeWidth={strokeWidth}
                         fill="transparent"
-                        className="text-gray-100"
+                        className="text-white/10"
                     />
                     {/* Progress Ring */}
                     <circle
@@ -65,9 +65,9 @@ export function ProgressRing({
 
                 {/* Inner Text content */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-2">
-                    <span className="text-xl font-bold leading-none">{Math.round(value)}</span>
-                    <span className="text-xs text-gray-500 mt-1 uppercase tracking-wider">{label}</span>
-                    {sublabel && <span className="text-[10px] text-gray-400 mt-0.5">{sublabel}</span>}
+                    <span className="text-xl font-bold leading-none text-white">{Math.round(value)}</span>
+                    <span className="text-xs text-gray-400 mt-1 uppercase tracking-wider">{label}</span>
+                    {sublabel && <span className="text-[10px] text-gray-500 mt-0.5">{sublabel}</span>}
                 </div>
             </div>
         </div>

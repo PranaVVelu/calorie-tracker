@@ -115,23 +115,23 @@ export default function LogFoodPage() {
     return (
         <div className="max-w-2xl mx-auto space-y-6">
             <header className="mb-6">
-                <h1 className="text-2xl font-bold text-gray-900">Log Food</h1>
-                <p className="text-gray-500">Search the database, or describe your meal and let AI estimate it.</p>
+                <h1 className="text-2xl font-bold text-white">Log Food</h1>
+                <p className="text-gray-400">Search the database, or describe your meal and let AI estimate it.</p>
             </header>
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Meal</label>
-                    <select value={selectedMeal} onChange={e => setSelectedMeal(e.target.value)} className="w-full border border-gray-300 rounded-md p-2">
-                        <option value="Breakfast">Breakfast</option>
-                        <option value="Lunch">Lunch</option>
-                        <option value="Dinner">Dinner</option>
-                        <option value="Snack">Snack</option>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Meal</label>
+                    <select value={selectedMeal} onChange={e => setSelectedMeal(e.target.value)} style={{ colorScheme: 'dark' }} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2">
+                        <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="Breakfast">Breakfast</option>
+                        <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="Lunch">Lunch</option>
+                        <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="Dinner">Dinner</option>
+                        <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="Snack">Snack</option>
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Servings (for database search)</label>
-                    <input type="number" step="0.5" min="0.5" value={selectedServing} onChange={e => setSelectedServing(Number(e.target.value))} className="w-full border border-gray-300 rounded-md p-2" />
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Servings (for database search)</label>
+                    <input type="number" step="0.5" min="0.5" value={selectedServing} onChange={e => setSelectedServing(Number(e.target.value))} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
                 </div>
             </div>
 
@@ -145,12 +145,12 @@ export default function LogFoodPage() {
                             onChange={e => setAiDescription(e.target.value)}
                             placeholder="e.g. Grilled chicken sandwich with fries and a small side salad"
                             rows={3}
-                            className="w-full border border-gray-300 rounded-md p-3 focus:ring-primary focus:border-primary resize-none"
+                            className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-3 focus:ring-primary focus:border-primary resize-none"
                         />
                         <button
                             type="submit"
                             disabled={aiLoading || !aiDescription.trim()}
-                            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
+                            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-black font-semibold glow-primary px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
                         >
                             {aiLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                             {aiLoading ? 'Analyzing...' : 'Analyze with AI'}
@@ -158,38 +158,38 @@ export default function LogFoodPage() {
                     </form>
 
                     {aiError && (
-                        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-3">{aiError}</p>
+                        <p className="text-sm text-red-400 bg-danger/10 border border-danger/30 rounded-md p-3">{aiError}</p>
                     )}
 
                     {aiResult && (
-                        <div className="border border-gray-200 rounded-md p-4 space-y-3 bg-gray-50">
+                        <div className="border border-white/15 rounded-md p-4 space-y-3 bg-white/5">
                             <div className="flex items-center justify-between">
-                                <h4 className="font-semibold text-gray-900">{aiResult.name}</h4>
-                                <span className="text-xs text-gray-500">{aiResult.servingSize}</span>
+                                <h4 className="font-semibold text-white">{aiResult.name}</h4>
+                                <span className="text-xs text-gray-400">{aiResult.servingSize}</span>
                             </div>
                             <div className="grid grid-cols-4 gap-2 text-center text-sm">
                                 <div>
-                                    <p className="font-semibold text-gray-900">{aiResult.calories}</p>
-                                    <p className="text-xs text-gray-500">kcal</p>
+                                    <p className="font-semibold text-white">{aiResult.calories}</p>
+                                    <p className="text-xs text-gray-400">kcal</p>
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-gray-900">{aiResult.protein}g</p>
-                                    <p className="text-xs text-gray-500">Protein</p>
+                                    <p className="font-semibold text-white">{aiResult.protein}g</p>
+                                    <p className="text-xs text-gray-400">Protein</p>
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-gray-900">{aiResult.carbs}g</p>
-                                    <p className="text-xs text-gray-500">Carbs</p>
+                                    <p className="font-semibold text-white">{aiResult.carbs}g</p>
+                                    <p className="text-xs text-gray-400">Carbs</p>
                                 </div>
                                 <div>
-                                    <p className="font-semibold text-gray-900">{aiResult.fat}g</p>
-                                    <p className="text-xs text-gray-500">Fat</p>
+                                    <p className="font-semibold text-white">{aiResult.fat}g</p>
+                                    <p className="text-xs text-gray-400">Fat</p>
                                 </div>
                             </div>
                             <p className="text-xs text-gray-400">AI-estimated, adjust manually later if needed.</p>
                             <button
                                 onClick={handleConfirmAiMeal}
                                 disabled={aiSaving}
-                                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
+                                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-black font-semibold glow-primary px-4 py-2 rounded-md font-medium transition-colors disabled:opacity-50"
                             >
                                 <Plus className="h-4 w-4" />
                                 {aiSaving ? 'Adding...' : `Add to ${selectedMeal}`}
@@ -213,10 +213,10 @@ export default function LogFoodPage() {
                                 value={query}
                                 onChange={e => setQuery(e.target.value)}
                                 placeholder="Search for a food (e.g., Apple, Chicken)..."
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary focus:border-primary"
+                                className="w-full pl-10 pr-4 py-2 border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md focus:ring-primary focus:border-primary"
                             />
                         </div>
-                        <button type="submit" disabled={searching || !query} className="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-md font-medium transition-colors">
+                        <button type="submit" disabled={searching || !query} className="bg-primary hover:bg-primary-dark text-black font-semibold glow-primary px-4 py-2 rounded-md font-medium transition-colors">
                             {searching ? '...' : 'Search'}
                         </button>
                     </form>
@@ -227,12 +227,12 @@ export default function LogFoodPage() {
             {results.length > 0 && (
                 <Card>
                     <CardHeader title="Search Results" />
-                    <ul className="divide-y divide-gray-100">
+                    <ul className="divide-y divide-white/10">
                         {results.map(item => (
-                            <li key={item.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                            <li key={item.id} className="p-4 flex items-center justify-between hover:bg-white/5 transition-colors">
                                 <div>
-                                    <h4 className="font-semibold text-gray-900">{item.name}</h4>
-                                    <p className="text-sm text-gray-500">
+                                    <h4 className="font-semibold text-white">{item.name}</h4>
+                                    <p className="text-sm text-gray-400">
                                         {item.servingSize} • {Math.round(item.calories)} kcal
                                         <span className="text-xs ml-2 text-gray-400 border-l pl-2">
                                             P: {item.protein}g C: {item.carbs}g F: {item.fat}g
