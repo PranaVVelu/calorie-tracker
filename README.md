@@ -2,16 +2,20 @@
 
 MacroTrack is a full-stack Next.js application designed to help users manage their dietary goals, log foods, and track their weight over time. 
 
-Built with React (Next.js App Router), Tailwind CSS, and Prisma (SQLite), this application operates entirely locally for rapid development and testing without reliance on external paid APIs.
+Built with React (Next.js App Router), Tailwind CSS, and Prisma (Postgres), the app pairs a fast local food database with an AI-powered natural language meal parser (Google Gemini) so users can log food the way they'd describe it out loud.
 
 ## Architecture & Features
 
-The application is structured into three primary user flows:
+The application is structured into four primary user flows:
 
 1. **Dashboard (`/`)**: A daily overview displaying remaining calories, macronutrient progress rings (Protein, Carbs, Fat), a quick view of today's logged meals, and overall goal status.
-2. **Food Logging (`/log`)**: A searchable interface connecting to a locally seeded database of 100+ food items. Users can add foods to specific meals (Breakfast, Lunch, Dinner, Snack) with adjustable serving sizes.
+2. **AI Meal Logging (`/log`)**: Users can describe a meal in plain English (e.g. "grilled chicken sandwich with fries and a small side salad"), and the Gemini API estimates calories, protein, carbs, fat, and serving size, which the user reviews before saving. A traditional searchable interface over a locally seeded database of 100+ food items is also available as a fallback.
 3. **Weight Tracking (`/weight`)**: Allows users to log their weight. It also features a "Time to Goal" estimation engine that provides projections based on both theoretical intake and actual historical scale trends.
 4. **Settings & Onboarding (`/settings`)**: A form to capture demographic data (age, weight, height, gender, activity level) and dietary goals (lose/maintain/gain, target rate).
+
+## AI Integration
+
+`src/actions/ai.actions.ts` sends the user's free-text meal description to Gemini (`gemini-2.0-flash`) with a structured-output prompt, requesting a strict JSON object (name, calories, protein, carbs, fat, servingSize). The response is validated and defensively parsed before being surfaced to the user for review, then saved through the same `createCustomFoodAndAddToMeal` path used by manual entries.
 
 ## Setup Instructions
 
@@ -21,21 +25,27 @@ The application is structured into three primary user flows:
    cd calorie-tracker
    npm install
    ```
-3. **Initialize Database**:
-   The project uses a local SQLite database (`dev.db`). Push the Prisma schema to create the tables:
+3. **Set up your Gemini API key** (free tier, no card required):
+   - Get a key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+   - Create a `.env.local` file in the project root and add:
+     ```
+     GEMINI_API_KEY=your_key_here
+     ```
+4. **Initialize Database**:
+   Push the Prisma schema to create the tables:
    ```bash
    npx prisma db push
    ```
-4. **Seed the Database**:
+5. **Seed the Database**:
    Populate the database with the initial 100 food items and two sample users ("John Loss" and "Jane Gain"):
    ```bash
    npm run seed
    ```
-5. **Run the Development Server**:
+6. **Run the Development Server**:
    ```bash
    npm run dev
    ```
-6. **Access the App**:
+7. **Access the App**:
    Open `http://localhost:3000` in your browser. 
    *(Note: The app is currently hardcoded in the frontend to load the profile of `loser@test.com` for demonstration purposes. To view the weight gain profile, you can manually change the `email` variable in `src/app/page.tsx` to `gainer@test.com`.)*
 
