@@ -17,6 +17,9 @@ const GEMINI_MODEL = 'gemini-flash-latest';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export async function parseMealDescription(description: string): Promise<ParsedMeal> {
+    if (process.env.NEXT_PUBLIC_DEMO_ONLY === 'true') {
+        throw new Error('AI estimates are turned off in the demo.');
+    }
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {

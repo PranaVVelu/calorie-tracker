@@ -1,244 +1,505 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader } from '@/components/ui/Card';
-import { UnitToggle } from '@/components/ui/UnitToggle';
-import { getUserProfile, upsertUserProfile } from '@/actions/user.actions';
-import { GenderType, GoalType } from '@/utils/algorithms';
-import { useUnitSystem, kgToLbs, lbsToKg, cmToFeetInches, feetInchesToCm } from '@/utils/units';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Calculator, PencilRuler, Info } from 'lucide-react';
+import { useData, useMutation, useQuery } from '@/lib/data/DataProvider';
+import { useToast } from '@/components/ui/Toast';
+import { Card, CardHeader, cn } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Segmented } from '@/components/ui/Segmented';
+import { Field } from '@/components/ui/Field';
+import { ErrorState, Skeleton } from '@/components/ui/States';
+import { MACRO_META } from '@/components/ui/MacroBar';
+import { DemoControls } from '@/components/app/AppShell';
+import { computeTargets } from '@/lib/targets';
+import { macroCalories } from '@/lib/nutrition';
+import { parseDecimal } from '@/lib/validation';
+import { todayKey } from '@/lib/dates';
+import { cmToFeetInches, displayWeight, feetInchesToCm, toKg, useUnitSystem, weightUnit, LB_PER_KG, type UnitSystem } from '@/utils/units';
+import type { GoalType, GenderType, Profile, ProfileInput, TargetMode, Targets } from '@/lib/types';
 
-export default function SettingsPage() {
-    const router = useRouter();
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const email = 'loser@test.com'; // Demo user
-    const { unitSystem, setUnitSystem, loaded: unitLoaded } = useUnitSystem();
+const ACTIVITY = [
+    { value: 1.2, label: 'Sedentary', hint: 'Desk job, little exercise' },
+    { value: 1.375, label: 'Light', hint: 'Exercise 1–2 days/week' },
+    { value: 1.55, label: 'Moderate', hint: 'Exercise 3–5 days/week' },
+    { value: 1.725, label: 'Heavy', hint: 'Exercise 6–7 days/week' },
+    { value: 1.9, label: 'Athlete', hint: 'Training twice a day' },
+];
 
-    // Height, when in imperial mode, is edited as separate feet/inches fields.
-    const [heightFeet, setHeightFeet] = useState(5);
-    const [heightInches, setHeightInches] = useState(9);
+const DEFAULT_PROFILE: ProfileInput = { name: '', age: 30, gender: 'male', height: 175, weight: 75, activityLevel: 1.375, goalType: 'maintain', goalRate: 0.5, goalWeight: 75 };
 
-    const [formData, setFormData] = useState({
-        name: '',
-        age: 30,
-        gender: 'male' as GenderType,
-        height: 175, // always stored in cm
-        weight: 75,  // always stored in kg
-        activityLevel: 1.2,
-        goalType: 'lose' as GoalType,
-        goalRate: 0.5, // always stored in kg/week
-        goalWeight: 70 // always stored in kg
-    });
-
-    useEffect(() => {
-        getUserProfile(email).then(user => {
-            if (user) {
-                setFormData({
-                    name: user.name || '',
-                    age: user.age,
-                    gender: user.gender as GenderType,
-                    height: user.height,
-                    weight: user.weight,
-                    activityLevel: user.activityLevel,
-                    goalType: user.goalType as GoalType,
-                    goalRate: user.goalRate,
-                    goalWeight: user.goalWeight
-                });
-                const { feet, inches } = cmToFeetInches(user.height);
-                setHeightFeet(feet);
-                setHeightInches(inches);
-            }
-            setLoading(false);
-        });
-    }, []);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value, type } = e.target;
-        setFormData(prev => ({
-            ...prev,
-            [name]: type === 'number' ? Number(value) : value
-        }));
-    };
-
-    // --- Imperial-aware handlers: convert on the way in, store metric ---
-    const handleWeightLbsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const lbs = Number(e.target.value);
-        setFormData(prev => ({ ...prev, weight: Math.round(lbsToKg(lbs) * 10) / 10 }));
-    };
-
-    const handleGoalWeightLbsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const lbs = Number(e.target.value);
-        setFormData(prev => ({ ...prev, goalWeight: Math.round(lbsToKg(lbs) * 10) / 10 }));
-    };
-
-    const handleHeightFeetChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const feet = Number(e.target.value);
-        setHeightFeet(feet);
-        setFormData(prev => ({ ...prev, height: Math.round(feetInchesToCm(feet, heightInches) * 10) / 10 }));
-    };
-
-    const handleHeightInchesChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const inches = Number(e.target.value);
-        setHeightInches(inches);
-        setFormData(prev => ({ ...prev, height: Math.round(feetInchesToCm(heightFeet, inches) * 10) / 10 }));
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setSaving(true);
-        await upsertUserProfile({ ...formData, email });
-        setSaving(false);
-        router.push('/');
-        router.refresh();
-    };
-
-    if (loading || !unitLoaded) return <div className="p-8 text-center text-gray-400 animate-pulse">Loading profile...</div>;
-
-    const isImperial = unitSystem === 'imperial';
-    // Display-only rate: internal storage always stays kg/week regardless of unit system.
-    const displayedRate = isImperial ? Math.round(kgToLbs(formData.goalRate) * 100) / 100 : formData.goalRate;
+export default function GoalsPage() {
+    const profile = useQuery('profile', api => api.getProfile());
+    const { unitSystem, setUnitSystem } = useUnitSystem();
 
     return (
-        <div className="max-w-2xl mx-auto space-y-6">
-            <header className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                    <h1 className="text-2xl font-bold text-white">Profile & Goals</h1>
-                    <p className="text-gray-400">Update your metrics to recalculate your targets.</p>
-                </div>
-                <UnitToggle value={unitSystem} onChange={setUnitSystem} />
+        <div className="space-y-5">
+            <header>
+                <p className="eyebrow">Goals & preferences</p>
+                <h1 className="mt-1 text-[28px] font-semibold tracking-tight text-ink sm:text-[32px]">Goals</h1>
             </header>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
+            {profile.error ? (
                 <Card>
-                    <CardHeader title="Personal Information" />
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Name</label>
-                                <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Age</label>
-                                <input required type="number" name="age" value={formData.age} onChange={handleChange} min="15" max="120" className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Gender (Biological)</label>
-                                <select name="gender" value={formData.gender} onChange={handleChange} style={{ colorScheme: 'dark' }} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2">
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="male">Male</option>
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="female">Female</option>
-                                </select>
-                            </div>
-
-                            {isImperial ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Height (ft/in)</label>
-                                    <div className="flex gap-2">
-                                        <select value={heightFeet} onChange={handleHeightFeetChange} style={{ colorScheme: 'dark' }} className="w-full border border-white/15 bg-white/5 text-white rounded-md p-2">
-                                            {Array.from({ length: 6 }, (_, i) => i + 3).map(ft => (
-                                                <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} key={ft} value={ft}>{ft} ft</option>
-                                            ))}
-                                        </select>
-                                        <select value={heightInches} onChange={handleHeightInchesChange} style={{ colorScheme: 'dark' }} className="w-full border border-white/15 bg-white/5 text-white rounded-md p-2">
-                                            {Array.from({ length: 12 }, (_, i) => i).map(inch => (
-                                                <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} key={inch} value={inch}>{inch} in</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Height (cm)</label>
-                                    <input required type="number" name="height" value={formData.height} onChange={handleChange} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
-                                </div>
-                            )}
-
-                            {isImperial ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Current Weight (lb)</label>
-                                    <input required type="number" step="0.1" value={Math.round(kgToLbs(formData.weight) * 10) / 10} onChange={handleWeightLbsChange} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Current Weight (kg)</label>
-                                    <input required type="number" step="0.1" name="weight" value={formData.weight} onChange={handleChange} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
-                                </div>
-                            )}
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Activity Level</label>
-                                <select name="activityLevel" value={String(formData.activityLevel)} onChange={handleChange} style={{ colorScheme: 'dark' }} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2">
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="1.2">Sedentary (Office job)</option>
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="1.375">Light Exercise (1-2 days/week)</option>
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="1.55">Moderate Exercise (3-5 days/week)</option>
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="1.725">Heavy Exercise (6-7 days/week)</option>
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="1.9">Athlete (2x per day)</option>
-                                </select>
-                            </div>
-                        </div>
-                    </CardContent>
+                    <ErrorState error={profile.error} onRetry={profile.reload} />
                 </Card>
-
-                <Card>
-                    <CardHeader title="Goals" subtitle="How you want your targets calculated." />
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Goal Type</label>
-                                <select name="goalType" value={formData.goalType} onChange={handleChange} style={{ colorScheme: 'dark' }} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2">
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="lose">Lose Weight</option>
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="maintain">Maintain Weight</option>
-                                    <option style={{ backgroundColor: '#0d0f12', color: '#ffffff' }} value="gain">Gain Weight</option>
-                                </select>
-                            </div>
-
-                            {isImperial ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Goal Weight (lb)</label>
-                                    <input required type="number" step="0.1" value={Math.round(kgToLbs(formData.goalWeight) * 10) / 10} onChange={handleGoalWeightLbsChange} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
-                                </div>
-                            ) : (
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-300 mb-1">Goal Weight (kg)</label>
-                                    <input required type="number" step="0.1" name="goalWeight" value={formData.goalWeight} onChange={handleChange} className="w-full border border-white/15 bg-white/5 text-white placeholder-gray-500 rounded-md p-2" />
-                                </div>
-                            )}
-                        </div>
-
-                        {formData.goalType !== 'maintain' && (
-                            <div>
-                                <label className="flex justify-between items-center text-sm font-medium text-gray-300 mb-1">
-                                    <span>Target Rate ({isImperial ? 'lb' : 'kg'}/week)</span>
-                                    <span className="text-secondary">{displayedRate} {isImperial ? 'lb' : 'kg'}</span>
-                                </label>
-                                <input
-                                    type="range"
-                                    name="goalRate"
-                                    min={formData.goalType === 'gain' ? "0.1" : "0.25"}
-                                    max={formData.goalType === 'gain' ? "0.5" : "1.0"}
-                                    step="0.05"
-                                    value={formData.goalRate}
-                                    onChange={handleChange}
-                                    className="w-full accent-primary h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
-                                />
-                                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                                    <span>Slow & Steady</span>
-                                    <span>Aggressive</span>
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <div className="flex justify-end gap-3">
-                    <button type="button" onClick={() => router.back()} className="px-4 py-2 text-gray-400 hover:text-white border border-white/15 bg-white/5 rounded-md hover:bg-white/10 transition-colors">
-                        Cancel
-                    </button>
-                    <button type="submit" disabled={saving} className="px-6 py-2 bg-primary hover:bg-primary-dark text-black font-semibold glow-primary rounded-md font-medium transition-colors">
-                        {saving ? 'Saving...' : 'Save & Recalculate'}
-                    </button>
+            ) : profile.loading ? (
+                <div className="grid gap-5 lg:grid-cols-2">
+                    <Skeleton className="h-96 rounded-[1.25rem]" />
+                    <Skeleton className="h-96 rounded-[1.25rem]" />
                 </div>
-            </form>
+            ) : (
+                <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+                    <div className="space-y-5">
+                        {profile.data && <TargetsCard profile={profile.data} />}
+                        <ProfileCard profile={profile.data ?? null} unitSystem={unitSystem} />
+                    </div>
+                    <div className="space-y-5">
+                        <Card>
+                            <CardHeader title="Units" subtitle="Applies to weight and height everywhere. Stored data doesn’t change." />
+                            <div className="p-5">
+                                <Segmented
+                                    label="Unit system"
+                                    value={unitSystem}
+                                    onChange={setUnitSystem}
+                                    options={[
+                                        { value: 'metric', label: 'Metric (kg, cm)' },
+                                        { value: 'imperial', label: 'Imperial (lb, ft/in)' },
+                                    ]}
+                                />
+                            </div>
+                        </Card>
+                        <Card>
+                            <CardHeader title="Demo" subtitle="Explore MacroTrack with sample data. Demo changes never touch your account." />
+                            <div className="p-5">
+                                <DemoControls />
+                            </div>
+                        </Card>
+                        <HistoryNote />
+                    </div>
+                </div>
+            )}
         </div>
     );
+}
+
+function HistoryNote() {
+    return (
+        <Card className="flex gap-3 p-4">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-3" aria-hidden />
+            <p className="text-[13px] text-ink-2">
+                Target changes apply from today forward. Earlier days keep the targets that applied at the time, so past progress is judged fairly.
+            </p>
+        </Card>
+    );
+}
+
+function TargetsCard({ profile }: { profile: Profile }) {
+    const mutate = useMutation();
+    const toast = useToast();
+    const calc = useMemo(() => computeTargets(profile), [profile]);
+    const [mode, setMode] = useState<TargetMode>(profile.targetMode);
+    const [draft, setDraft] = useState(() => toDraft(profile.targets));
+    const [busy, setBusy] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+
+    useEffect(() => {
+        setMode(profile.targetMode);
+        setDraft(toDraft(profile.targets));
+    }, [profile.targetMode, profile.targets]);
+
+    const parsed: Targets | null = (() => {
+        const v = { calories: parseDecimal(draft.calories), protein: parseDecimal(draft.protein), carbs: parseDecimal(draft.carbs), fat: parseDecimal(draft.fat) };
+        if (Object.values(v).some(x => x == null || x < 0)) return null;
+        return { calories: Math.round(v.calories!), protein: Math.round(v.protein!), carbs: Math.round(v.carbs!), fat: Math.round(v.fat!) };
+    })();
+
+    // Headline = targets in effect; switching to Calculated previews the recalculated numbers.
+    const shown = mode === 'manual' ? parsed ?? profile.targets : profile.targetMode === 'calculated' ? profile.targets : calc.targets;
+    const macroKcal = macroCalories(shown);
+    const dirty = mode !== profile.targetMode || (mode === 'manual' && parsed != null && JSON.stringify(parsed) !== JSON.stringify(profile.targets)) || (mode === 'calculated' && JSON.stringify(calc.targets) !== JSON.stringify(profile.targets));
+
+    const save = async () => {
+        if (mode === 'manual') {
+            if (!parsed) return setErr('Enter all four targets as numbers');
+            if (parsed.calories < 800 || parsed.calories > 10000) return setErr('Calories should be between 800 and 10,000');
+        }
+        setErr(null);
+        setBusy(true);
+        try {
+            await mutate(api => api.saveTargets({ mode, targets: mode === 'manual' ? parsed! : undefined, effectiveFrom: todayKey() }));
+            toast({ message: 'Targets saved · applied from today' });
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : 'Could not save');
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Card aria-labelledby="targets-title">
+            <CardHeader
+                id="targets-title"
+                title="Daily targets"
+                subtitle={profile.targetMode === 'manual' ? 'Custom targets you set' : 'Calculated from your profile'}
+                action={
+                    <Segmented
+                        size="sm"
+                        label="Target mode"
+                        value={mode}
+                        onChange={setMode}
+                        options={[
+                            { value: 'calculated', label: 'Calculated' },
+                            { value: 'manual', label: 'Custom' },
+                        ]}
+                    />
+                }
+            />
+            <div className="space-y-5 p-5">
+                {/* Headline targets */}
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="col-span-2 rounded-2xl bg-surface-2 p-4 sm:col-span-1">
+                        <p className="eyebrow">Calories</p>
+                        <p className="num mt-1 text-3xl font-semibold text-ink">{shown.calories.toLocaleString()}</p>
+                        <p className="text-xs text-ink-3">kcal / day</p>
+                    </div>
+                    {(['protein', 'carbs', 'fat'] as const).map(m => (
+                        <div key={m} className="rounded-2xl bg-surface-2 p-4">
+                            <p className="eyebrow flex items-center gap-1.5">
+                                <span className={cn('h-2 w-2 rounded-full', MACRO_META[m].bgClass)} aria-hidden />
+                                {MACRO_META[m].label}
+                            </p>
+                            <p className="num mt-1 text-2xl font-semibold text-ink">
+                                {shown[m]}
+                                <span className="text-sm font-normal text-ink-3"> g</span>
+                            </p>
+                            <p className="text-xs text-ink-3">{shown.calories ? Math.round(((shown[m] * (m === 'fat' ? 9 : 4)) / shown.calories) * 100) : 0}% of kcal</p>
+                        </div>
+                    ))}
+                </div>
+
+                {mode === 'calculated' ? (
+                    <div className="rounded-2xl border border-line p-4">
+                        <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+                            <Calculator className="h-4 w-4 text-accent" aria-hidden /> How this is calculated
+                        </p>
+                        <ol className="mt-3 space-y-2 text-[13px] text-ink-2">
+                            <Step n={1} label="Resting burn (BMR, Mifflin-St Jeor)" value={`${Math.round(calc.bmr).toLocaleString()} kcal`} />
+                            <Step n={2} label={`× activity ${profile.activityLevel} → maintenance (TDEE)`} value={`${Math.round(calc.tdee).toLocaleString()} kcal`} />
+                            <Step
+                                n={3}
+                                label={profile.goalType === 'maintain' ? 'Goal: maintain' : `Goal: ${profile.goalType} ${profile.goalRate} kg/week (≈1,100 kcal/day per kg/week)`}
+                                value={`${calc.adjustment > 0 ? '+' : ''}${calc.adjustment.toLocaleString()} kcal`}
+                            />
+                            <Step n={4} label="Protein: 2.0 g/kg (1.8 when maintaining) · Fat: 25% of kcal · Carbs: the rest" value="" />
+                        </ol>
+                        {calc.floorApplied && (
+                            <p className="mt-3 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-ink-2">
+                                Raised to the safety minimum ({profile.gender === 'male' ? '1,500' : '1,200'} kcal) for your profile.
+                            </p>
+                        )}
+                        {JSON.stringify(calc.targets) !== JSON.stringify(profile.targets) && profile.targetMode === 'calculated' && (
+                            <p className="mt-3 rounded-xl bg-white/[0.04] px-3 py-2 text-xs text-ink-2">
+                                Your profile has changed since these targets were set. Recalculated:{' '}
+                                <span className="num font-semibold text-ink">
+                                    {calc.targets.calories.toLocaleString()} kcal · P {calc.targets.protein} · C {calc.targets.carbs} · F {calc.targets.fat}
+                                </span>
+                                . Save to apply from today.
+                            </p>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {(['calories', 'protein', 'carbs', 'fat'] as const).map(k => (
+                                <Field key={k} label={k === 'calories' ? 'Calories (kcal)' : `${MACRO_META[k].label} (g)`}>
+                                    {p => <input {...p} inputMode="decimal" className="input num" value={draft[k]} onChange={e => setDraft(d => ({ ...d, [k]: e.target.value }))} />}
+                                </Field>
+                            ))}
+                        </div>
+                        <p className={cn('text-xs', parsed && Math.abs(macroKcal - parsed.calories) > parsed.calories * 0.05 ? 'text-warn' : 'text-ink-3')}>
+                            Macros add up to {Math.round(macroKcal).toLocaleString()} kcal (protein & carbs 4 kcal/g, fat 9 kcal/g)
+                            {parsed && Math.abs(macroKcal - parsed.calories) > parsed.calories * 0.05 ? ` · ${Math.round(macroKcal - parsed.calories) > 0 ? 'above' : 'below'} your calorie target` : ''}.
+                        </p>
+                        <Button size="sm" variant="ghost" onClick={() => setDraft(toDraft(calc.targets))}>
+                            <PencilRuler className="h-3.5 w-3.5" aria-hidden /> Start from calculated values
+                        </Button>
+                    </div>
+                )}
+
+                {err && (
+                    <p className="text-xs text-danger" role="alert">
+                        {err}
+                    </p>
+                )}
+                <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
+                    <p className="text-xs text-ink-3">Applies from today. Past days keep their targets.</p>
+                    <Button variant="primary" onClick={save} loading={busy} disabled={!dirty}>
+                        Save targets
+                    </Button>
+                </div>
+            </div>
+        </Card>
+    );
+}
+
+function Step({ n, label, value }: { n: number; label: string; value: string }) {
+    return (
+        <li className="flex items-baseline gap-3">
+            <span className="num grid h-5 w-5 shrink-0 place-items-center rounded-full bg-surface-3 text-[11px] font-semibold text-ink-2">{n}</span>
+            <span className="flex-1">{label}</span>
+            {value && <span className="num font-semibold text-ink">{value}</span>}
+        </li>
+    );
+}
+
+function toDraft(t: Targets) {
+    return { calories: String(t.calories), protein: String(t.protein), carbs: String(t.carbs), fat: String(t.fat) };
+}
+
+type ProfileDraft = {
+    name: string;
+    age: string;
+    gender: GenderType;
+    heightCm: string;
+    feet: string;
+    inches: string;
+    weight: string; // display unit
+    goalWeight: string; // display unit
+    activityLevel: number;
+    goalType: GoalType;
+    goalRate: number; // kg/week
+};
+
+function draftFrom(p: ProfileInput, u: UnitSystem): ProfileDraft {
+    const fi = cmToFeetInches(p.height);
+    return {
+        name: p.name,
+        age: String(p.age),
+        gender: p.gender,
+        heightCm: String(Math.round(p.height)),
+        feet: String(fi.feet),
+        inches: String(fi.inches),
+        weight: String(displayWeight(p.weight, u)),
+        goalWeight: String(displayWeight(p.goalWeight, u)),
+        activityLevel: p.activityLevel,
+        goalType: p.goalType,
+        goalRate: p.goalRate,
+    };
+}
+
+function ProfileCard({ profile, unitSystem }: { profile: Profile | null; unitSystem: UnitSystem }) {
+    const mutate = useMutation();
+    const toast = useToast();
+    const { mode } = useData();
+    const base = profile ?? DEFAULT_PROFILE;
+    const [d, setD] = useState<ProfileDraft>(() => draftFrom(base, unitSystem));
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [busy, setBusy] = useState(false);
+    const weights = useQuery(profile ? 'weights' : null, api => api.getWeights());
+    const latest = weights.data?.length ? weights.data[weights.data.length - 1] : null;
+
+    // Re-express inputs when the unit preference changes (not on first render).
+    const prevUnit = useRef(unitSystem);
+    useEffect(() => {
+        if (prevUnit.current === unitSystem) return;
+        const from = prevUnit.current;
+        prevUnit.current = unitSystem;
+        setD(prev => {
+            const parsed = toInput(prev, from, base);
+            return parsed ? { ...draftFrom(parsed, unitSystem), name: prev.name } : prev;
+        });
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [unitSystem]);
+
+    const input = toInput(d, unitSystem, base);
+    const preview = input ? computeTargets(input) : null;
+    const set = <K extends keyof ProfileDraft>(k: K, v: ProfileDraft[K]) => setD(prev => ({ ...prev, [k]: v }));
+    const unit = weightUnit(unitSystem);
+    const rateDisplay = unitSystem === 'imperial' ? `${Math.round(d.goalRate * LB_PER_KG * 10) / 10} lb` : `${d.goalRate} kg`;
+
+    const save = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const errs: Record<string, string> = {};
+        const age = Number(d.age);
+        if (!(age >= 13 && age <= 120)) errs.age = 'Age 13–120';
+        if (!input) errs.form = 'Check height and weights';
+        else {
+            if (!(input.height > 50 && input.height < 300)) errs.height = 'Check height';
+            if (!(input.weight > 20 && input.weight < 500)) errs.weight = 'Check weight';
+            if (!(input.goalWeight > 20 && input.goalWeight < 500)) errs.goalWeight = 'Check goal weight';
+        }
+        setErrors(errs);
+        if (Object.keys(errs).length || !input) return;
+        setBusy(true);
+        try {
+            await mutate(api => api.saveProfile(input, todayKey()));
+            toast({ message: profile?.targetMode === 'manual' ? 'Profile saved · custom targets kept' : 'Profile saved · targets updated from today' });
+        } catch (e2) {
+            setErrors({ form: e2 instanceof Error ? e2.message : 'Could not save' });
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <Card aria-labelledby="profile-title">
+            <CardHeader id="profile-title" title={profile ? 'Profile' : 'Set up your profile'} subtitle="Used to calculate your targets." />
+            <form onSubmit={save} className="space-y-4 p-5" noValidate>
+                <div className="grid grid-cols-2 gap-3">
+                    <Field label="Name" className="col-span-2 sm:col-span-1">
+                        {p => <input {...p} className="input" value={d.name} onChange={e => set('name', e.target.value)} autoComplete="given-name" />}
+                    </Field>
+                    <Field label="Age" error={errors.age}>
+                        {p => <input {...p} inputMode="numeric" className="input num" value={d.age} onChange={e => set('age', e.target.value)} />}
+                    </Field>
+                    <div className="col-span-2 sm:col-span-1">
+                        <p className="mb-1.5 text-[13px] font-medium text-ink-2">Sex (for BMR)</p>
+                        <Segmented
+                            label="Sex"
+                            value={d.gender}
+                            onChange={v => set('gender', v)}
+                            options={[
+                                { value: 'male', label: 'Male' },
+                                { value: 'female', label: 'Female' },
+                            ]}
+                            className="w-full"
+                        />
+                    </div>
+                    {unitSystem === 'metric' ? (
+                        <Field label="Height (cm)" error={errors.height}>
+                            {p => <input {...p} inputMode="decimal" className="input num" value={d.heightCm} onChange={e => set('heightCm', e.target.value)} />}
+                        </Field>
+                    ) : (
+                        <fieldset>
+                            <legend className="mb-1.5 text-[13px] font-medium text-ink-2">Height</legend>
+                            <div className="flex gap-2">
+                                <label className="sr-only" htmlFor="ft">Feet</label>
+                                <input id="ft" inputMode="numeric" className="input num" value={d.feet} onChange={e => set('feet', e.target.value)} aria-describedby="ft-u" />
+                                <span id="ft-u" className="self-center text-xs text-ink-3">ft</span>
+                                <label className="sr-only" htmlFor="in">Inches</label>
+                                <input id="in" inputMode="numeric" className="input num" value={d.inches} onChange={e => set('inches', e.target.value)} />
+                                <span className="self-center text-xs text-ink-3">in</span>
+                            </div>
+                        </fieldset>
+                    )}
+                    <Field
+                        label={`Current weight (${unit})`}
+                        error={errors.weight}
+                        hint={
+                            latest && Math.abs(latest.weight - (input?.weight ?? 0)) > 0.05 ? (
+                                <button type="button" className="text-accent underline-offset-2 hover:underline" onClick={() => set('weight', String(displayWeight(latest.weight, unitSystem)))}>
+                                    Use latest weigh-in ({displayWeight(latest.weight, unitSystem)} {unit})
+                                </button>
+                            ) : undefined
+                        }
+                    >
+                        {p => <input {...p} inputMode="decimal" className="input num" value={d.weight} onChange={e => set('weight', e.target.value)} />}
+                    </Field>
+                    <Field label={`Goal weight (${unit})`} error={errors.goalWeight}>
+                        {p => <input {...p} inputMode="decimal" className="input num" value={d.goalWeight} onChange={e => set('goalWeight', e.target.value)} />}
+                    </Field>
+                </div>
+
+                <div>
+                    <p className="mb-1.5 text-[13px] font-medium text-ink-2">Activity</p>
+                    <div role="radiogroup" aria-label="Activity level" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {ACTIVITY.map(a => (
+                            <button
+                                key={a.value}
+                                type="button"
+                                role="radio"
+                                aria-checked={d.activityLevel === a.value}
+                                onClick={() => set('activityLevel', a.value)}
+                                className={cn('rounded-xl border px-3 py-2 text-left', d.activityLevel === a.value ? 'border-accent/50 bg-accent-soft' : 'border-line hover:border-line-strong')}
+                            >
+                                <span className="block text-[13px] font-medium text-ink">{a.label}</span>
+                                <span className="block text-[11px] text-ink-3">{a.hint}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                <div>
+                    <p className="mb-1.5 text-[13px] font-medium text-ink-2">Goal</p>
+                    <Segmented
+                        label="Goal"
+                        value={d.goalType}
+                        onChange={v => set('goalType', v)}
+                        options={[
+                            { value: 'lose', label: 'Lose' },
+                            { value: 'maintain', label: 'Maintain' },
+                            { value: 'gain', label: 'Gain' },
+                        ]}
+                        className="w-full"
+                    />
+                </div>
+                {d.goalType !== 'maintain' && (
+                    <div>
+                        <label htmlFor="rate" className="mb-1.5 flex justify-between text-[13px] font-medium text-ink-2">
+                            <span>Rate per week</span>
+                            <span className="num text-ink">{rateDisplay}</span>
+                        </label>
+                        <input
+                            id="rate"
+                            type="range"
+                            min={d.goalType === 'gain' ? 0.1 : 0.25}
+                            max={d.goalType === 'gain' ? 0.5 : 1}
+                            step={0.05}
+                            value={d.goalRate}
+                            onChange={e => set('goalRate', Number(e.target.value))}
+                            className="w-full accent-[var(--color-accent)]"
+                        />
+                        <div className="flex justify-between text-[11px] text-ink-3">
+                            <span>Gradual</span>
+                            <span>Aggressive</span>
+                        </div>
+                    </div>
+                )}
+
+                {preview && (
+                    <p className="rounded-xl bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
+                        {profile?.targetMode === 'manual' ? (
+                            <>Custom targets are on, so saving won’t change them. Calculated would be <span className="num font-semibold text-ink">{preview.targets.calories.toLocaleString()} kcal</span>.</>
+                        ) : (
+                            <>Calculated target: <span className="num font-semibold text-ink">{preview.targets.calories.toLocaleString()} kcal</span> · P {preview.targets.protein} g · C {preview.targets.carbs} g · F {preview.targets.fat} g</>
+                        )}
+                    </p>
+                )}
+                {errors.form && <p className="text-xs text-danger" role="alert">{errors.form}</p>}
+                <div className="flex justify-end">
+                    <Button type="submit" variant="primary" loading={busy}>
+                        {profile ? 'Save profile' : mode === 'demo' ? 'Save' : 'Create profile'}
+                    </Button>
+                </div>
+            </form>
+        </Card>
+    );
+}
+
+/**
+ * Draft → metric input. Untouched fields keep their exact stored kg/cm so
+ * repeated saves in imperial don't drift through rounding.
+ */
+function toInput(d: ProfileDraft, u: UnitSystem, base?: ProfileInput): ProfileInput | null {
+    const w = parseDecimal(d.weight);
+    const gw = parseDecimal(d.goalWeight);
+    const same = (raw: string, kg: number | undefined) => kg != null && raw === String(displayWeight(kg, u));
+    const height = u === 'metric' ? parseDecimal(d.heightCm) : (() => {
+        const f = parseDecimal(d.feet);
+        const i = parseDecimal(d.inches) ?? 0;
+        return f == null ? null : feetInchesToCm(f, i);
+    })();
+    const age = Number(d.age);
+    if (w == null || gw == null || height == null || !Number.isFinite(age)) return null;
+    return {
+        name: d.name.trim(),
+        age,
+        gender: d.gender,
+        height: base && (u === 'metric' ? d.heightCm === String(Math.round(base.height)) : (() => { const fi = cmToFeetInches(base.height); return d.feet === String(fi.feet) && d.inches === String(fi.inches); })()) ? base.height : Math.round(height * 10) / 10,
+        weight: same(d.weight, base?.weight) ? base!.weight : Math.round(toKg(w, u) * 100) / 100,
+        goalWeight: same(d.goalWeight, base?.goalWeight) ? base!.goalWeight : Math.round(toKg(gw, u) * 100) / 100,
+        activityLevel: d.activityLevel,
+        goalType: d.goalType,
+        goalRate: d.goalType === 'maintain' ? 0 : d.goalRate,
+    };
 }

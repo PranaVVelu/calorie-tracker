@@ -21,43 +21,57 @@ model User {
   goalRate       Float // kg per week
   goalWeight     Float // in kg
 
-  // Calculated Targets (stored for easy query, updated when profile changes)
+  // Current targets (mirrors the latest GoalPeriod for easy reads)
   tdee           Float
   calorieTarget  Int
   proteinTarget  Int
   carbsTarget    Int
   fatTarget      Int
+  // "calculated" = derived from profile; "manual" = user override
+  targetMode     String        @default("calculated")
 
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
   mealEntries    MealEntry[]
   weightEntries  WeightEntry[]
+  foods          FoodItem[]
+  savedMeals     SavedMeal[]
+  favorites      FavoriteFood[]
+  goalPeriods    GoalPeriod[]
 }
 
 model FoodItem {
   id           String     @id @default(cuid())
   name         String
   calories     Float
-  protein      Float
-  carbs        Float
-  fat          Float
+  // Macros are nullable: null means "unknown", which is different from 0.
+  protein      Float?
+  carbs        Float?
+  fat          Float?
   servingSize  String     // e.g. "100g", "1 apple"
-  source       String     @default("seed") // "seed" | "user_manual"
-  
-  mealFoods    MealFood[]
+  source       String     @default("seed") // "seed" | "user_manual" | "ai"
+  userId       String?    // owner for user-created foods; null = shared catalog
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime   @default(now())
+
+  mealFoods      MealFood[]
+  savedMealItems SavedMealItem[]
+  favorites      FavoriteFood[]
+
+  @@index([userId])
 }
 
 model MealEntry {
   id        String     @id @default(cuid())
-  date      DateTime   // Stored as start of day for grouping
+  date      DateTime   // UTC midnight of the user's local calendar day
   userId    String
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   mealFoods MealFood[]
-  
+
   createdAt DateTime   @default(now())
-  
+
   @@unique([userId, date]) // one meal entry container per user per day
 }
 
@@ -65,23 +79,85 @@ model MealFood {
   id          String    @id @default(cuid())
   mealType    String    // "Breakfast" | "Lunch" | "Dinner" | "Snack"
   servings    Float     @default(1.0)
-  
+
   mealEntryId String
   mealEntry   MealEntry @relation(fields: [mealEntryId], references: [id], onDelete: Cascade)
-  
+
   foodItemId  String
   foodItem    FoodItem  @relation(fields: [foodItemId], references: [id], onDelete: Restrict)
-  
+
+  // Per-serving nutrition snapshot taken at log time, so later edits to a
+  // food or saved meal never rewrite history. Null on legacy rows → fall back
+  // to foodItem values.
+  name        String?
+  calories    Float?
+  protein     Float?
+  carbs       Float?
+  fat         Float?
+  servingSize String?
+
+  savedMealId String?   // provenance only (no FK so deleting a saved meal keeps history)
+  requestId   String?   @unique // idempotency key to block duplicate submissions
+
   createdAt   DateTime  @default(now())
 }
 
 model WeightEntry {
   id        String   @id @default(cuid())
   weight    Float    // in kg
-  date      DateTime
-  
+  date      DateTime // UTC midnight of the user's local calendar day
+
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
   @@unique([userId, date]) // limit to one recorded weight daily
+}
+
+model SavedMeal {
+  id        String          @id @default(cuid())
+  name      String
+  userId    String
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     SavedMealItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([userId])
+}
+
+model SavedMealItem {
+  id          String    @id @default(cuid())
+  savedMealId String
+  savedMeal   SavedMeal @relation(fields: [savedMealId], references: [id], onDelete: Cascade)
+  foodItemId  String
+  foodItem    FoodItem  @relation(fields: [foodItemId], references: [id], onDelete: Restrict)
+  servings    Float     @default(1.0)
+  position    Int       @default(0)
+}
+
+model FavoriteFood {
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  foodItemId String
+  foodItem   FoodItem @relation(fields: [foodItemId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@id([userId, foodItemId])
+}
+
+// Targets in effect from `effectiveFrom` (inclusive) until the next period.
+// Lets history be judged against the goal that applied on that day.
+model GoalPeriod {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  effectiveFrom DateTime // UTC midnight of local day
+  calorieTarget Int
+  proteinTarget Int
+  carbsTarget   Int
+  fatTarget     Int
+  mode          String   @default("calculated")
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, effectiveFrom])
 }
