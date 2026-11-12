@@ -1,44 +1,69 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 export type UnitSystem = 'metric' | 'imperial';
 
 const STORAGE_KEY = 'macrotrack-unit-system';
+const listeners = new Set<() => void>();
+
+function read(): UnitSystem {
+    try {
+        return window.localStorage.getItem(STORAGE_KEY) === 'imperial' ? 'imperial' : 'metric';
+    } catch {
+        return 'metric';
+    }
+}
 
 /**
- * Persists the user's preferred display unit system (metric/imperial) in
- * localStorage so it's remembered across visits. The database always stores
- * height in cm and weight in kg regardless of this preference; conversion
+ * The user's preferred display unit system, shared across the app and
+ * remembered in localStorage. The database always stores kg/cm; conversion
  * happens only at the UI boundary.
  */
 export function useUnitSystem() {
-    const [unitSystem, setUnitSystemState] = useState<UnitSystem>('metric');
-    const [loaded, setLoaded] = useState(false);
-
-    useEffect(() => {
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (stored === 'metric' || stored === 'imperial') {
-            setUnitSystemState(stored);
-        }
-        setLoaded(true);
-    }, []);
-
+    const unitSystem = useSyncExternalStore(
+        l => {
+            listeners.add(l);
+            return () => listeners.delete(l);
+        },
+        read,
+        () => 'metric' as UnitSystem
+    );
     const setUnitSystem = (value: UnitSystem) => {
-        setUnitSystemState(value);
-        window.localStorage.setItem(STORAGE_KEY, value);
+        try {
+            window.localStorage.setItem(STORAGE_KEY, value);
+        } catch {
+            /* ignore */
+        }
+        listeners.forEach(l => l());
     };
-
-    return { unitSystem, setUnitSystem, loaded };
+    return { unitSystem, setUnitSystem, loaded: true };
 }
 
 // --- Weight ---
+export const LB_PER_KG = 2.20462262;
+
 export function kgToLbs(kg: number): number {
-    return kg * 2.20462262;
+    return kg * LB_PER_KG;
 }
 
 export function lbsToKg(lbs: number): number {
-    return lbs / 2.20462262;
+    return lbs / LB_PER_KG;
+}
+
+/** kg → number in the display unit, rounded to 1 decimal. */
+export function displayWeight(kg: number, unitSystem: UnitSystem): number {
+    const v = unitSystem === 'imperial' ? kgToLbs(kg) : kg;
+    return Math.round(v * 10) / 10;
+}
+
+/** Display-unit number → kg (full precision, stored as-is). */
+export function toKg(value: number, unitSystem: UnitSystem): number {
+    return unitSystem === 'imperial' ? lbsToKg(value) : value;
+}
+
+export function weightUnit(unitSystem: UnitSystem): 'kg' | 'lb' {
+    return unitSystem === 'imperial' ? 'lb' : 'kg';
 }
 
 // --- Height ---
@@ -60,10 +85,7 @@ export function feetInchesToCm(feet: number, inches: number): number {
 
 // --- Display formatting ---
 export function formatWeight(kg: number, unitSystem: UnitSystem): string {
-    if (unitSystem === 'imperial') {
-        return `${Math.round(kgToLbs(kg) * 10) / 10} lb`;
-    }
-    return `${Math.round(kg * 10) / 10} kg`;
+    return `${displayWeight(kg, unitSystem)} ${weightUnit(unitSystem)}`;
 }
 
 export function formatHeight(cm: number, unitSystem: UnitSystem): string {

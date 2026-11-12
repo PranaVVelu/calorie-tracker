@@ -6,27 +6,40 @@ export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
 }
 
-export function Card({ className, children }: { className?: string, children: React.ReactNode }) {
+export function Card({ className, children, as: As = 'section', ...rest }: React.HTMLAttributes<HTMLElement> & { as?: 'section' | 'div' | 'article' }) {
     return (
-        <div className={cn("glass-card rounded-2xl shadow-xl shadow-black/20 overflow-hidden", className)}>
+        <As className={cn('card', className)} {...rest}>
             {children}
+        </As>
+    );
+}
+
+export function CardHeader({
+    title,
+    subtitle,
+    action,
+    className,
+    id,
+}: {
+    title: React.ReactNode;
+    subtitle?: React.ReactNode;
+    action?: React.ReactNode;
+    className?: string;
+    id?: string;
+}) {
+    return (
+        <div className={cn('flex items-start justify-between gap-3 px-5 pt-5', className)}>
+            <div className="min-w-0">
+                <h2 id={id} className="text-[15px] font-semibold text-ink">
+                    {title}
+                </h2>
+                {subtitle && <p className="mt-0.5 text-[13px] text-ink-3">{subtitle}</p>}
+            </div>
+            {action && <div className="shrink-0">{action}</div>}
         </div>
     );
 }
 
-export function CardHeader({ title, subtitle, className }: { title: string, subtitle?: string, className?: string }) {
-    return (
-        <div className={cn("px-6 py-4 border-b border-white/10", className)}>
-            <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {subtitle && <p className="text-sm text-gray-400 mt-1">{subtitle}</p>}
-        </div>
-    );
-}
-
-export function CardContent({ className, children }: { className?: string, children: React.ReactNode }) {
-    return (
-        <div className={cn("p-6", className)}>
-            {children}
-        </div>
-    );
+export function CardContent({ className, children }: { className?: string; children: React.ReactNode }) {
+    return <div className={cn('p-5', className)}>{children}</div>;
 }
